@@ -12,7 +12,7 @@ from database import get_db
 router = APIRouter()
 
 
-@router.get("/", response_model=List[schemas.AnomalyWithEmployee])
+@router.get("", response_model=List[schemas.Anomaly])
 def get_anomalies(
     status: Optional[str] = None,
     risk_level: Optional[str] = None,

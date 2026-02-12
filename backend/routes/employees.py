@@ -12,7 +12,7 @@ from ml.feature_engineering import calculate_behavioral_fingerprint
 router = APIRouter()
 
 
-@router.get("/", response_model=List[schemas.Employee])
+@router.get("", response_model=List[schemas.Employee])
 def get_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get list of all employees"""
     employees = db.query(models.Employee).offset(skip).limit(limit).all()
@@ -28,7 +28,7 @@ def get_employee(employee_id: int, db: Session = Depends(get_db)):
     return employee
 
 
-@router.post("/", response_model=schemas.Employee)
+@router.post("", response_model=schemas.Employee)
 def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
     """Create new employee"""
     # Check if employee_id already exists
