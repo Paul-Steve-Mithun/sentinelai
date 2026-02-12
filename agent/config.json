@@ -1,0 +1,14 @@
+{
+    "employee_id": null,
+    "backend_url": "http://localhost:8000",
+    "collection_interval": 30,
+    "batch_size": 10,
+    "monitored_directories": [
+        "~/Documents",
+        "~/Downloads",
+        "~/Desktop"
+    ],
+    "enable_file_monitoring": true,
+    "enable_network_monitoring": true,
+    "enable_process_monitoring": true
+}
