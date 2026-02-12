@@ -1,6 +1,6 @@
 {
     "employee_id": null,
-    "backend_url": "http://localhost:8000",
+    "backend_url": "https://sentinelai-backend-lue3.onrender.com",
     "collection_interval": 30,
     "batch_size": 10,
     "monitored_directories": [
