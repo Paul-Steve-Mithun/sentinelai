@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/api/init", tags=["initialization"])
 
@@ -54,7 +54,7 @@ def initialize_database(db: Session = Depends(get_db)):
             db.refresh(employee)
             
             # Generate 30 days of normal events
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
             for day in range(30):
                 current_date = start_date + timedelta(days=day)
                 

@@ -4,7 +4,7 @@ Extracts behavioral features from raw events to create employee baselines
 """
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 from sqlalchemy.orm import Session
 import models
@@ -22,7 +22,7 @@ def calculate_behavioral_fingerprint(db: Session, employee_id: int, days_back: i
     Returns:
         Dictionary of behavioral features
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
     
     # Get employee and their events
     employee = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
@@ -164,7 +164,7 @@ def extract_features_from_recent_events(db: Session, employee_id: int, hours_bac
     Extract features from recent events for real-time anomaly detection
     Similar to fingerprint but for shorter time window
     """
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
     
     events = db.query(models.BehavioralEvent).filter(
         models.BehavioralEvent.employee_id == employee_id,

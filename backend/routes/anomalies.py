@@ -4,7 +4,7 @@ Anomaly management routes
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import models
 import schemas
 from database import get_db
@@ -110,7 +110,7 @@ def resolve_anomaly(
         raise HTTPException(status_code=404, detail="Anomaly not found")
     
     anomaly.status = resolution.status
-    anomaly.resolved_at = datetime.utcnow()
+    anomaly.resolved_at = datetime.now(timezone.utc)
     anomaly.resolved_by = resolution.resolved_by
     anomaly.resolution_notes = resolution.resolution_notes
     
@@ -137,7 +137,7 @@ def implement_mitigation(
         raise HTTPException(status_code=404, detail="Mitigation strategy not found")
     
     strategy.implemented = True
-    strategy.implemented_at = datetime.utcnow()
+    strategy.implemented_at = datetime.now(timezone.utc)
     strategy.implemented_by = implementation.implemented_by
     
     db.commit()

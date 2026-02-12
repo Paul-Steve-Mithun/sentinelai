@@ -7,7 +7,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple, Dict, Optional
 import pandas as pd
 
@@ -62,7 +62,7 @@ class AnomalyDetector:
         )
         self.kmeans.fit(X_scaled)
         
-        self.trained_at = datetime.utcnow()
+        self.trained_at = datetime.now(timezone.utc)
         
         # Save model
         self.save_model()

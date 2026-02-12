@@ -13,7 +13,7 @@ from ml.anomaly_detector import AnomalyDetector
 from ml.explainability import ExplainabilityEngine
 from ml.mitre_mapper import MitreMapper
 from ml.mitigation_engine import MitigationEngine
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 def detect_anomalies():
     """Run anomaly detection on all employees"""
@@ -47,7 +47,7 @@ def detect_anomalies():
             print(f"\nProcessing {employee.name} (ID: {employee.id})...")
             
             # Get recent events (last 24 hours)
-            cutoff = datetime.utcnow() - timedelta(hours=24)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
             recent_events = db.query(models.BehavioralEvent).filter(
                 models.BehavioralEvent.employee_id == employee.id,
                 models.BehavioralEvent.timestamp >= cutoff

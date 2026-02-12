@@ -4,7 +4,7 @@ Event ingestion and retrieval routes
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import models
 import schemas
 from database import get_db
@@ -23,7 +23,7 @@ def create_event(event: schemas.BehavioralEventCreate, db: Session = Depends(get
     # Create event
     db_event = models.BehavioralEvent(**event.model_dump())
     if db_event.timestamp is None:
-        db_event.timestamp = datetime.utcnow()
+        db_event.timestamp = datetime.now(timezone.utc)
     
     db.add(db_event)
     db.commit()
@@ -129,7 +129,7 @@ def create_events_bulk(events: List[schemas.BehavioralEventCreate], db: Session 
         
         db_event = models.BehavioralEvent(**event_data.model_dump())
         if db_event.timestamp is None:
-            db_event.timestamp = datetime.utcnow()
+            db_event.timestamp = datetime.now(timezone.utc)
         
         db.add(db_event)
         created_events.append(db_event)

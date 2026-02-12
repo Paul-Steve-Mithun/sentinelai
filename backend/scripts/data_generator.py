@@ -5,7 +5,7 @@ Generates realistic behavioral data with normal and anomalous patterns
 import random
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,7 +44,7 @@ def generate_employees(db, count=20):
 def generate_normal_events(db, employee, days=30):
     """Generate normal behavioral events for an employee"""
     events = []
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Normal login pattern: 8-10 AM on weekdays
     for day in range(days):
@@ -110,7 +110,7 @@ def generate_normal_events(db, employee, days=30):
 def generate_anomalous_events(db, employee, anomaly_type='unusual_login'):
     """Generate anomalous events for testing"""
     events = []
-    base_time = datetime.utcnow() - timedelta(days=random.randint(1, 7))
+    base_time = datetime.now(timezone.utc) - timedelta(days=random.randint(1, 7))
     
     if anomaly_type == 'unusual_login':
         # Login at 3 AM

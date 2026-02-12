@@ -4,7 +4,7 @@ Dashboard statistics and analytics routes
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 import models
 import schemas
@@ -136,7 +136,7 @@ def get_top_threats(limit: int = 10, db: Session = Depends(get_db)):
 @router.get("/timeline", response_model=List[schemas.TimelinePoint])
 def get_anomaly_timeline(days: int = 30, db: Session = Depends(get_db)):
     """Get anomaly timeline for the past N days"""
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Get all anomalies in the time range
     anomalies = db.query(models.Anomaly).filter(
