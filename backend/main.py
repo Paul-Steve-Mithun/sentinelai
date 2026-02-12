@@ -19,7 +19,8 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="SentinelAI - Insider Threat Detection",
     description="Behavioral-based insider threat detection using ML anomaly detection",
-    version="1.0.0"
+    version="1.0.0",
+    redirect_slashes=False  # Prevent 307 redirects that break CORS
 )
 
 # Configure CORS
