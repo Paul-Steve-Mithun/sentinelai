@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # Import and include routers
-from routes import employees, events, anomalies, dashboard, ml_ops, agent
+from routes import employees, events, anomalies, dashboard, ml_ops, agent, init
 
 app.include_router(employees.router, prefix="/api/employees", tags=["employees"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
@@ -42,6 +42,7 @@ app.include_router(anomalies.router, prefix="/api/anomalies", tags=["anomalies"]
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(ml_ops.router, prefix="/api/ml", tags=["ml"])
 app.include_router(agent.router)  # Agent routes have their own prefix
+app.include_router(init.router)  # Init route for database setup
 
 
 @app.get("/")
