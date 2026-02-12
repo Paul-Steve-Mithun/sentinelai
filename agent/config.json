@@ -1,6 +1,6 @@
 {
   "backend_url": "http://localhost:8000",
-  "collection_interval": 5,
+  "collection_interval": 2,
   "batch_size": 1,
-  "employee_id": "698e3f4e6f10e8f6978cd225"
+  "employee_id": "698e45bb6f10e8f6978cd3e9"
 }

@@ -199,6 +199,45 @@ async def process_event_anomaly(employee_id: str, db_event: models.BehavioralEve
     from ml.mitigation_engine import MitigationEngine
     
     try:
+        # 0. Immediate Rule-Based Checks (Bypass ML for specific violations)
+        if db_event.event_type == 'policy_violation':
+            print(f"🚨 Immediate Policy Violation Detected: {db_event.description}")
+            
+            # Create anomaly record immediately
+            anomaly = models.Anomaly(
+                employee_id=employee_id,
+                anomaly_score=-1.0, # High anomaly score
+                risk_level='critical',
+                risk_score=100,
+                trigger_event_id=db_event.id,
+                description=f"Policy Violation: {db_event.description}",
+                anomaly_type='policy_violation',
+                shap_values={}, # No SHAP for rule-based
+                top_features=[{"feature": "policy_violation", "value": 1.0, "description": "Blocked Execution"}]
+            )
+            await anomaly.create()
+            
+            # Create MITRE mapping
+            await models.MitreMapping(
+                anomaly_id=anomaly.id,
+                technique_id="T1204.002",
+                technique_name="User Execution: Malicious File",
+                tactic="Execution",
+                description="User attempted to execute a blocked file extension (.bat/.cmd/.vbs)",
+                confidence=1.0
+            ).create()
+            
+            # Create Mitigation Strategy
+            await models.MitigationStrategy(
+                anomaly_id=anomaly.id,
+                strategy_name="Isolate and Educate",
+                description="The agent has already blocked the process. Recommend security awareness training for the employee.",
+                action_type="automated_blocking",
+                status="active"
+            ).create()
+            
+            return
+
         # Extract recent features
         features = await extract_features_from_recent_events(employee_id, hours_back=24)
         feature_array = features_to_array(features)

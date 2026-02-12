@@ -328,28 +328,100 @@ class SentinelAgent:
         except Exception as e:
             print(f"❌ Failed to restore network: {e}")
     
+    def enforce_process_policy(self):
+        """Enforce process execution policies (e.g. block .bat files)"""
+        try:
+            # We want to catch this fast, so we iterate processes
+            # This can be resource intensive so we should be careful
+            # We look for cmd.exe processes with .bat in command line
+            blocked_extensions = ['.bat', '.cmd', '.vbs']
+            
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    # Check cmdline arguments
+                    cmdline = proc.info['cmdline']
+                    if not cmdline:
+                        continue
+                        
+                    # Flatten cmdline to string for search
+                    cmd_str = ' '.join(cmdline).lower()
+                    
+                    # Check if any blocked extension is in the command line
+                    for ext in blocked_extensions:
+                        if ext in cmd_str:
+                            print(f"🚨 POLICY VIOLATION DETECTED: Illegal process {proc.info['name']} running {ext} file")
+                            print(f"   Command: {cmd_str}")
+                            print("   ACTION: KILLING PROCESS TREE")
+                            
+                            try:
+                                if platform.system() == 'Windows':
+                                    # Force kill process and children (Tree)
+                                    subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], 
+                                                 stdout=subprocess.DEVNULL, 
+                                                 stderr=subprocess.DEVNULL)
+                                else:
+                                    # Linux/Mac
+                                    parent = psutil.Process(proc.pid)
+                                    for child in parent.children(recursive=True):
+                                        child.kill()
+                                    parent.kill()
+                            except Exception as kill_err:
+                                print(f"   Error killing process: {kill_err}")
+                                # Fallback
+                                try:
+                                    proc.kill()
+                                except:
+                                    pass
+                            
+                            # Log the event
+                            event = {
+                                'event_type': 'policy_violation',
+                                'timestamp': datetime.now(timezone.utc).isoformat(),
+                                'description': f'Blocked execution of {ext} file',
+                                'details': cmd_str,
+                                'success': False, 
+                                **self._get_system_metrics()
+                            }
+                            self.event_queue.put(event)
+                            break
+                            
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+                    
+        except Exception as e:
+            print(f"Error enforcing policies: {e}")
+
     def collection_loop(self):
         """Main event collection loop"""
         print(f"🔄 Starting event collection (interval: {self.collection_interval}s)")
+        print(f"🛡️  Real-time process enforcement active")
+        
+        last_collection = 0
         
         while self.running:
             try:
-                print(f"\n📊 Collecting events at {datetime.now().strftime('%H:%M:%S')}")
+                current_time = time.time()
                 
-                # Collect various events
-                self.collect_login_event()
-                self.collect_file_access_events()
-                self.collect_network_events()
-                self.collect_process_events()
-                
-                # Send events to backend
-                self.send_events()
+                # Enforce policies frequently (every cycle)
+                self.enforce_process_policy()
                 
                 # Check for isolation commands
                 self.check_isolation_status()
                 
-                # Wait for next collection interval
-                time.sleep(self.collection_interval)
+                # Collect events only on interval
+                if current_time - last_collection >= self.collection_interval:
+                    print(f"\n📊 Collecting events at {datetime.now().strftime('%H:%M:%S')}")
+                    
+                    self.collect_login_event()
+                    self.collect_file_access_events()
+                    self.collect_network_events()
+                    self.collect_process_events()
+                    self.send_events()
+                    
+                    last_collection = current_time
+                
+                # Sleep briefly to not eat CPU, but fast enough to catch processes
+                time.sleep(1) # check every 1 second
                 
             except KeyboardInterrupt:
                 print("\n⚠️  Stopping agent...")
