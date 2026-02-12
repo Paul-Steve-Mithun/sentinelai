@@ -17,6 +17,7 @@ router = APIRouter()
 
 
 @router.post("/train")
+@router.get("/train")
 def train_model(db: Session = Depends(get_db)):
     """Train or retrain the anomaly detection model"""
     # Get all employees
