@@ -1,36 +1,41 @@
 """
-Database configuration and session management
+Database configuration and connection management for MongoDB
 """
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import os
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sentinel.db")
+# MongoDB Configuration
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "sentinel_ai")
 
-# Fix for Render PostgreSQL URLs (they use postgres:// but SQLAlchemy needs postgresql://)
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-# Create SQLAlchemy engine
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
-
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create Base class for models
-Base = declarative_base()
-
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def init_db():
+    """Initialize database connection and Beanie models"""
+    client = AsyncIOMotorClient(MONGODB_URL)
+    database = client[DB_NAME]
+    
+    # Import models here to avoid circular imports
+    from models import (
+        Employee, 
+        BehavioralEvent, 
+        BehavioralFingerprint, 
+        Anomaly, 
+        MitreMapping, 
+        MitigationStrategy
+    )
+    
+    await init_beanie(
+        database=database,
+        document_models=[
+            Employee,
+            BehavioralEvent,
+            BehavioralFingerprint,
+            Anomaly,
+            MitreMapping,
+            MitigationStrategy
+        ]
+    )

@@ -216,6 +216,40 @@ class MitigationEngine:
                     'action': 'Set up off-hours alerts',
                     'description': 'Configure notifications for activity outside business hours'
                 }
+            ],
+            'high_cpu_usage': [
+                {
+                    'priority': 1,
+                    'category': 'immediate',
+                    'action': 'Investigate running processes',
+                    'description': 'Identify processes consuming high CPU (potential crypto miner)'
+                },
+                {
+                    'priority': 2,
+                    'category': 'immediate',
+                    'action': 'Scan for malware',
+                    'description': 'Run deep system scan for resource hijacking malware'
+                },
+                {
+                    'priority': 3,
+                    'category': 'short_term',
+                    'action': 'Kill suspicious process',
+                    'description': 'Terminate any unauthorized high-resource processes'
+                }
+            ],
+            'high_memory_usage': [
+                {
+                    'priority': 1,
+                    'category': 'immediate',
+                    'action': 'Check for memory leaks/bloat',
+                    'description': 'Identify applications using excessive memory'
+                },
+                {
+                    'priority': 2,
+                    'category': 'immediate',
+                    'action': 'Scan for memory-resident malware',
+                    'description': 'Check for malware injecting into legitimate processes'
+                }
             ]
         }
         
@@ -341,6 +375,12 @@ class MitigationEngine:
                 'category': 'short_term',
                 'action': 'Audit cloud access',
                 'description': 'Review and restrict cloud storage access permissions'
+            },
+            'T1496': {
+                'priority': 1,
+                'category': 'immediate',
+                'action': 'Isolate and Clean',
+                'description': 'Disconnect from network and remove crypto-mining malware'
             }
         }
         

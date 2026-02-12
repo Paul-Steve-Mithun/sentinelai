@@ -1,14 +1,6 @@
 {
-    "employee_id": null,
-    "backend_url": "http://192.168.137.1:8000",
-    "collection_interval": 30,
-    "batch_size": 10,
-    "monitored_directories": [
-        "~/Documents",
-        "~/Downloads",
-        "~/Desktop"
-    ],
-    "enable_file_monitoring": true,
-    "enable_network_monitoring": true,
-    "enable_process_monitoring": true
+  "backend_url": "http://localhost:8000",
+  "collection_interval": 5,
+  "batch_size": 1,
+  "employee_id": "698e3f4e6f10e8f6978cd225"
 }

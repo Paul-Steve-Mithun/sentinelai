@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, User, MapPin, Mail, Briefcase } from 'lucide-react';
+import { ArrowLeft, User, MapPin, Mail, Briefcase, Shield, ShieldOff, Activity } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts';
 import RiskBadge from '../components/RiskBadge';
-import { getEmployee, getEmployeeProfile, getEmployeeAnomalies } from '../services/api';
+import { getEmployee, getEmployeeProfile, getEmployeeAnomalies, isolateAgent, restoreAgent, getAgentStatus } from '../services/api';
 
 export default function EmployeeProfile() {
     const { id } = useParams();
@@ -11,6 +11,8 @@ export default function EmployeeProfile() {
     const [profile, setProfile] = useState(null);
     const [anomalies, setAnomalies] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isIsolated, setIsIsolated] = useState(false);
+    const [processingAction, setProcessingAction] = useState(false);
 
     useEffect(() => {
         loadEmployeeData();
@@ -18,18 +20,49 @@ export default function EmployeeProfile() {
 
     const loadEmployeeData = async () => {
         try {
+            // First get employee to get the real ID (in case id param is something else)
+            // But here id is likely the DB ID from URL
             const [empRes, profRes, anomRes] = await Promise.all([
                 getEmployee(id),
                 getEmployeeProfile(id),
                 getEmployeeAnomalies(id)
             ]);
             setEmployee(empRes.data);
+            setIsIsolated(empRes.data.is_isolated || false); // Use value from DB
             setProfile(profRes.data);
             setAnomalies(anomRes.data);
+
+            // Double check status from agent endpoint
+            try {
+                const statusRes = await getAgentStatus(id);
+                setIsIsolated(statusRes.data.isolated);
+            } catch (ignore) {
+                // Agent status might fail if not registered or other reasons
+            }
+
         } catch (error) {
             console.error('Error loading employee:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggleIsolation = async () => {
+        if (!employee) return;
+        setProcessingAction(true);
+        try {
+            if (isIsolated) {
+                await restoreAgent(employee.id || id);
+                setIsIsolated(false);
+            } else {
+                await isolateAgent(employee.id || id);
+                setIsIsolated(true);
+            }
+        } catch (error) {
+            console.error('Error toggling isolation:', error);
+            alert('Failed to update isolation status');
+        } finally {
+            setProcessingAction(false);
         }
     };
 
@@ -77,12 +110,36 @@ export default function EmployeeProfile() {
                             <p className="text-gray-400">{employee.employee_id}</p>
                         </div>
                     </div>
-                    {anomalies.length > 0 && (
-                        <RiskBadge
-                            level={anomalies[0].risk_level}
-                            score={anomalies[0].risk_score}
-                        />
-                    )}
+
+                    <div className="flex items-center space-x-3">
+                        {anomalies.length > 0 && (
+                            <RiskBadge
+                                level={anomalies[0].risk_level}
+                                score={anomalies[0].risk_score}
+                            />
+                        )}
+
+                        <button
+                            onClick={handleToggleIsolation}
+                            disabled={processingAction}
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition ${isIsolated
+                                    ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                                    : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                                } ${processingAction ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                            {isIsolated ? (
+                                <>
+                                    <Shield className="w-5 h-5" />
+                                    <span>{processingAction ? "Restoring..." : "Restore Network"}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <ShieldOff className="w-5 h-5" />
+                                    <span>{processingAction ? "Isolating..." : "Isolate Device"}</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
@@ -134,8 +191,8 @@ export default function EmployeeProfile() {
                     <div className="space-y-4">
                         {anomalies.map((anomaly) => (
                             <Link
-                                key={anomaly.id}
-                                to={`/anomalies/${anomaly.id}`}
+                                key={anomaly._id}
+                                to={`/anomalies/${anomaly._id}`}
                                 className="block glass p-4 rounded-lg hover:bg-white/10 transition"
                             >
                                 <div className="flex items-start justify-between">

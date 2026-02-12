@@ -1,1 +1,40 @@
 @import "tailwindcss";
+
+@layer utilities {
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500;
+  }
+  
+  .glass {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+  
+  .risk-critical {
+    @apply bg-red-500/20 text-red-400 border-red-500/50;
+  }
+  
+  .risk-high {
+    @apply bg-orange-500/20 text-orange-400 border-orange-500/50;
+  }
+  
+  .risk-medium {
+    @apply bg-yellow-500/20 text-yellow-400 border-yellow-500/50;
+  }
+  
+  .risk-low {
+    @apply bg-green-500/20 text-green-400 border-green-500/50;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+body {
+  @apply bg-gray-900 text-white min-h-screen;
+}

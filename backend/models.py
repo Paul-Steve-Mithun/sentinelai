@@ -1,150 +1,161 @@
 """
-Database models for insider threat detection system
+Database models for insider threat detection system (MongoDB/Beanie)
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON, Boolean, Text
-from sqlalchemy.orm import relationship
+from typing import Optional, List, Dict, Any
 from datetime import datetime
-from database import Base
+from beanie import Document, Link, PydanticObjectId
+from pydantic import Field, EmailStr
 
-
-class Employee(Base):
-    __tablename__ = "employees"
+class Employee(Document):
+    """Employee document"""
+    employee_id: str = Field(..., description="Unique employee ID string")
+    name: str
+    email: str = Field(..., description="Unique email")
+    department: str
+    role: str
+    baseline_location: Optional[str] = None
+    is_isolated: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, unique=True, index=True)
-    name = Column(String, index=True)
-    email = Column(String, unique=True)
-    department = Column(String)
-    role = Column(String)
-    baseline_location = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    events = relationship("BehavioralEvent", back_populates="employee")
-    fingerprints = relationship("BehavioralFingerprint", back_populates="employee")
-    anomalies = relationship("Anomaly", back_populates="employee")
+    class Settings:
+        name = "employees"
+        indexes = [
+            "employee_id",
+            "email",
+            "name"
+        ]
 
-
-class BehavioralEvent(Base):
-    __tablename__ = "behavioral_events"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"))
-    event_type = Column(String, index=True)  # login, file_access, network, firewall, privilege_escalation
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+class BehavioralEvent(Document):
+    """Behavioral event document"""
+    employee_id: PydanticObjectId = Field(..., description="Reference to Employee ID")
+    event_type: str  # login, file_access, network, firewall, privilege_escalation
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     # Event details
-    location = Column(String, nullable=True)
-    ip_address = Column(String, nullable=True)
-    port = Column(Integer, nullable=True)
-    file_path = Column(String, nullable=True)
-    action = Column(String, nullable=True)  # read, write, delete, execute
-    success = Column(Boolean, default=True)
+    location: Optional[str] = None
+    ip_address: Optional[str] = None
+    port: Optional[int] = None
+    file_path: Optional[str] = None
+    action: Optional[str] = None # read, write, delete, execute
+    success: bool = True
     
     # Additional metadata
-    event_metadata = Column(JSON, nullable=True)
+    event_metadata: Optional[Dict[str, Any]] = None
     
-    # Relationships
-    employee = relationship("Employee", back_populates="events")
-
-
-class BehavioralFingerprint(Base):
-    __tablename__ = "behavioral_fingerprints"
+    # System Metrics
+    cpu_usage: float = 0.0
+    memory_usage: float = 0.0
     
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"))
-    computed_at = Column(DateTime, default=datetime.utcnow)
+    class Settings:
+        name = "behavioral_events"
+        indexes = [
+            "employee_id",
+            "event_type",
+            "timestamp"
+        ]
+
+class BehavioralFingerprint(Document):
+    """Behavioral fingerprint document (baseline)"""
+    employee_id: PydanticObjectId = Field(..., description="Reference to Employee ID")
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Behavioral features (baseline)
-    avg_login_hour = Column(Float)
-    login_hour_std = Column(Float)
-    unique_locations_count = Column(Integer)
-    avg_location_distance = Column(Float)
-    unique_ports_count = Column(Integer)
-    avg_port_number = Column(Float)
-    file_access_rate = Column(Float)  # files per day
-    sensitive_file_access_rate = Column(Float)
-    privilege_escalation_rate = Column(Float)  # sudo attempts per day
-    firewall_change_rate = Column(Float)  # changes per week
-    network_activity_volume = Column(Float)  # MB per day
-    failed_login_rate = Column(Float)
+    avg_login_hour: float
+    login_hour_std: float
+    unique_locations_count: int
+    avg_location_distance: float
+    unique_ports_count: int
+    avg_port_number: float
+    file_access_rate: float  # files per day
+    sensitive_file_access_rate: float
+    privilege_escalation_rate: float  # sudo attempts per day
+    firewall_change_rate: float  # changes per week
+    network_activity_volume: float  # MB per day
+    failed_login_rate: float
     
     # Time-based patterns
-    weekday_activity_ratio = Column(Float)  # weekday vs weekend
-    night_activity_ratio = Column(Float)  # night (10pm-6am) vs day
+    weekday_activity_ratio: float  # weekday vs weekend
+    night_activity_ratio: float  # night (10pm-6am) vs day
     
-    # Relationships
-    employee = relationship("Employee", back_populates="fingerprints")
+    class Settings:
+        name = "behavioral_fingerprints"
+        indexes = [
+            "employee_id",
+            "computed_at"
+        ]
 
-
-class Anomaly(Base):
-    __tablename__ = "anomalies"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"))
-    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+class Anomaly(Document):
+    """Anomaly document"""
+    employee_id: PydanticObjectId = Field(..., description="Reference to Employee ID")
+    detected_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Anomaly details
-    anomaly_score = Column(Float)  # -1 to 1 (Isolation Forest score)
-    risk_level = Column(String)  # low, medium, high, critical
-    risk_score = Column(Integer)  # 0-100
+    anomaly_score: float  # -1 to 1 (Isolation Forest score)
+    risk_level: str  # low, medium, high, critical
+    risk_score: int  # 0-100
     
     # Event that triggered anomaly
-    trigger_event_id = Column(Integer, ForeignKey("behavioral_events.id"), nullable=True)
+    trigger_event_id: Optional[PydanticObjectId] = None
     
     # Anomaly description
-    description = Column(Text)
-    anomaly_type = Column(String)  # unusual_login, unusual_location, unusual_port, etc.
+    description: str
+    anomaly_type: str  # unusual_login, unusual_location, unusual_port, etc.
     
     # SHAP explanation
-    shap_values = Column(JSON)  # Feature contributions
-    top_features = Column(JSON)  # Top contributing features
+    shap_values: Optional[Dict[str, float]] = None # Feature contributions
+    top_features: Optional[List[Dict[str, Any]]] = None # Top contributing features
     
     # Status
-    status = Column(String, default="open")  # open, investigating, resolved, false_positive
-    resolved_at = Column(DateTime, nullable=True)
-    resolved_by = Column(String, nullable=True)
-    resolution_notes = Column(Text, nullable=True)
+    status: str = "open"  # open, investigating, resolved, false_positive
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    resolution_notes: Optional[str] = None
     
-    # Relationships
-    employee = relationship("Employee", back_populates="anomalies")
-    mitre_mappings = relationship("MitreMapping", back_populates="anomaly")
-    mitigation_strategies = relationship("MitigationStrategy", back_populates="anomaly")
+    class Settings:
+        name = "anomalies"
+        indexes = [
+            "employee_id",
+            "detected_at",
+            "risk_level",
+            "status"
+        ]
 
-
-class MitreMapping(Base):
-    __tablename__ = "mitre_mappings"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    anomaly_id = Column(Integer, ForeignKey("anomalies.id"))
+class MitreMapping(Document):
+    """MITRE ATT&CK mapping document"""
+    anomaly_id: PydanticObjectId = Field(..., description="Reference to Anomaly ID")
     
     # MITRE ATT&CK details
-    technique_id = Column(String)  # e.g., T1078
-    technique_name = Column(String)
-    tactic = Column(String)  # e.g., Initial Access, Privilege Escalation
-    description = Column(Text)
-    confidence = Column(Float)  # 0-1
+    technique_id: str  # e.g., T1078
+    technique_name: str
+    tactic: str  # e.g., Initial Access, Privilege Escalation
+    description: str
+    confidence: float  # 0-1
     
-    # Relationships
-    anomaly = relationship("Anomaly", back_populates="mitre_mappings")
+    class Settings:
+        name = "mitre_mappings"
+        indexes = [
+            "anomaly_id",
+            "technique_id"
+        ]
 
-
-class MitigationStrategy(Base):
-    __tablename__ = "mitigation_strategies"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    anomaly_id = Column(Integer, ForeignKey("anomalies.id"))
+class MitigationStrategy(Document):
+    """Mitigation strategy document"""
+    anomaly_id: PydanticObjectId = Field(..., description="Reference to Anomaly ID")
     
     # Strategy details
-    priority = Column(Integer)  # 1 (highest) to 5 (lowest)
-    category = Column(String)  # immediate, short_term, long_term
-    action = Column(Text)
-    description = Column(Text)
+    priority: int  # 1 (highest) to 5 (lowest)
+    category: str  # immediate, short_term, long_term
+    action: str
+    description: str
     
     # Status
-    implemented = Column(Boolean, default=False)
-    implemented_at = Column(DateTime, nullable=True)
-    implemented_by = Column(String, nullable=True)
+    implemented: bool = False
+    implemented_at: Optional[datetime] = None
+    implemented_by: Optional[str] = None
     
-    # Relationships
-    anomaly = relationship("Anomaly", back_populates="mitigation_strategies")
+    class Settings:
+        name = "mitigation_strategies"
+        indexes = [
+            "anomaly_id",
+            "priority"
+        ]

@@ -79,12 +79,12 @@ export default function EmployeeMonitoring() {
             {/* Employee Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredEmployees.map((employee) => {
-                    const risk = getEmployeeRisk(employee.id);
+                    const risk = getEmployeeRisk(employee._id);
 
                     return (
                         <Link
-                            key={employee.id}
-                            to={`/employees/${employee.id}`}
+                            key={employee._id}
+                            to={`/employees/${employee._id}`}
                             className="glass rounded-xl p-6 card-hover"
                         >
                             <div className="flex items-start justify-between mb-4">

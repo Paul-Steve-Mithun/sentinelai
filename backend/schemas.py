@@ -1,19 +1,22 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
+
+from beanie import PydanticObjectId
 
 # Employee Schemas
 class EmployeeBase(BaseModel):
     employee_id: str
     name: str
-    email: EmailStr
+    email: str
     department: str
     role: str
     baseline_location: Optional[str] = None
+    is_isolated: bool = False
 
 
 class EmployeeCreate(EmployeeBase):
@@ -21,11 +24,14 @@ class EmployeeCreate(EmployeeBase):
 
 
 class Employee(EmployeeBase):
-    id: int
-    created_at: datetime
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 # Behavioral Event Schemas
@@ -39,18 +45,23 @@ class BehavioralEventBase(BaseModel):
     action: Optional[str] = None
     success: Optional[bool] = True
     metadata: Optional[Dict[str, Any]] = None
+    cpu_usage: Optional[float] = 0.0
+    memory_usage: Optional[float] = 0.0
 
 
 class BehavioralEventCreate(BehavioralEventBase):
-    employee_id: int
+    employee_id: str
 
 
 class BehavioralEvent(BehavioralEventBase):
-    id: int
-    employee_id: int
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    employee_id: str
     
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 # Behavioral Fingerprint Schemas
@@ -72,12 +83,15 @@ class BehavioralFingerprintBase(BaseModel):
 
 
 class BehavioralFingerprint(BehavioralFingerprintBase):
-    id: int
-    employee_id: int
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    employee_id: Union[str, PydanticObjectId]
     computed_at: datetime
     
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 # Anomaly Schemas
@@ -90,8 +104,8 @@ class AnomalyBase(BaseModel):
 
 
 class Anomaly(AnomalyBase):
-    id: int
-    employee_id: int
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    employee_id: Union[str, PydanticObjectId]
     detected_at: datetime
     shap_values: Optional[Dict[str, float]] = None
     top_features: Optional[List[Dict[str, Any]]] = None
@@ -100,8 +114,16 @@ class Anomaly(AnomalyBase):
     resolved_by: Optional[str] = None
     resolution_notes: Optional[str] = None
     
+    @field_validator('employee_id')
+    @classmethod
+    def serialize_employee_id(cls, v):
+        return str(v)
+    
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 class AnomalyWithEmployee(Anomaly):
@@ -124,11 +146,19 @@ class MitreMappingBase(BaseModel):
 
 
 class MitreMapping(MitreMappingBase):
-    id: int
-    anomaly_id: int
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    anomaly_id: Union[str, PydanticObjectId]
+    
+    @field_validator('anomaly_id')
+    @classmethod
+    def serialize_anomaly_id(cls, v):
+        return str(v)
     
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 # Mitigation Strategy Schemas
@@ -140,14 +170,22 @@ class MitigationStrategyBase(BaseModel):
 
 
 class MitigationStrategy(MitigationStrategyBase):
-    id: int
-    anomaly_id: int
+    id: Optional[PydanticObjectId] = Field(alias="_id", default=None)
+    anomaly_id: Union[str, PydanticObjectId]
     implemented: bool
     implemented_at: Optional[datetime] = None
     implemented_by: Optional[str] = None
     
+    @field_validator('anomaly_id')
+    @classmethod
+    def serialize_anomaly_id(cls, v):
+        return str(v)
+    
     class Config:
         from_attributes = True
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
 
 
 class MitigationImplement(BaseModel):
@@ -174,7 +212,7 @@ class RiskDistribution(BaseModel):
 
 
 class TopThreat(BaseModel):
-    employee_id: int
+    employee_id: str
     employee_name: str
     risk_score: int
     anomaly_count: int
@@ -200,7 +238,7 @@ class ModelInfo(BaseModel):
 
 
 class PredictionRequest(BaseModel):
-    employee_id: int
+    employee_id: str
     features: Dict[str, float]
 
 

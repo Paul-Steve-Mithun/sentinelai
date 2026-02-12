@@ -61,6 +61,12 @@ class MitreMapper:
                 'tactic': 'Persistence',
                 'description': 'Adversaries may manipulate accounts to maintain access',
                 'indicators': ['privilege_escalation', 'account_modification']
+            },
+            'T1496': {
+                'name': 'Resource Hijacking',
+                'tactic': 'Impact',
+                'description': 'Adversaries may leverage compromised systems for resource intensive tasks like crypto mining',
+                'indicators': ['high_cpu', 'high_memory', 'resource_usage']
             }
         }
     
@@ -189,7 +195,11 @@ def determine_anomaly_type(top_features: List[Dict]) -> str:
         'network_activity_volume': 'network_activity',
         'failed_login_rate': 'failed_login',
         'weekday_activity_ratio': 'unusual_schedule',
-        'night_activity_ratio': 'night_activity'
+        'night_activity_ratio': 'night_activity',
+        'avg_cpu_usage': 'high_cpu_usage',
+        'std_cpu_usage': 'irregular_cpu_usage',
+        'avg_memory_usage': 'high_memory_usage',
+        'std_memory_usage': 'irregular_memory_usage'
     }
     
     return type_mapping.get(top_feature, 'behavioral_anomaly')
@@ -228,7 +238,11 @@ def generate_anomaly_description(anomaly_type: str, top_features: List[Dict], em
         'network_activity': f"{employee_name} generated {value:.1f} network events/day",
         'failed_login': f"{employee_name} had {value:.2f} failed logins/day",
         'unusual_schedule': f"{employee_name} shows unusual work schedule ({value:.1%} weekday activity)",
-        'night_activity': f"{employee_name} shows {value:.1%} night activity (unusual)"
+        'night_activity': f"{employee_name} shows {value:.1%} night activity (unusual)",
+        'high_cpu_usage': f"{employee_name} shows high CPU usage ({value:.1f}%)",
+        'high_memory_usage': f"{employee_name} shows high Memory usage ({value:.1f}%)",
+        'irregular_cpu_usage': f"{employee_name} shows irregular CPU patterns",
+        'irregular_memory_usage': f"{employee_name} shows irregular Memory patterns"
     }
     
     return descriptions.get(anomaly_type, f"Unusual {feature_name} detected for {employee_name}")

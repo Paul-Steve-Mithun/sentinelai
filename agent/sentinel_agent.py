@@ -11,7 +11,7 @@ import requests
 import psutil
 import platform
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import threading
 import queue
@@ -109,14 +109,25 @@ class SentinelAgent:
         except:
             return "127.0.0.1"
     
+    def _get_system_metrics(self) -> Dict[str, float]:
+        """Get current system metrics"""
+        try:
+            return {
+                'cpu_usage': psutil.cpu_percent(interval=None),
+                'memory_usage': psutil.virtual_memory().percent
+            }
+        except:
+            return {'cpu_usage': 0.0, 'memory_usage': 0.0}
+    
     def collect_login_event(self):
         """Collect login event"""
         event = {
             'event_type': 'login',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'location': self._get_location(),
             'ip_address': self._get_local_ip(),
-            'success': True
+            'success': True,
+            **self._get_system_metrics()
         }
         self.event_queue.put(event)
     
@@ -135,7 +146,8 @@ class SentinelAgent:
                     continue
                     
                 for root, dirs, files in os.walk(directory):
-                    for file in files[:5]:  # Limit to 5 files per directory
+                    # Check recent files (limit to 1000 to prevent performance issues in huge dirs)
+                    for file in files[:1000]:
                         file_path = os.path.join(root, file)
                         try:
                             stat = os.stat(file_path)
@@ -146,7 +158,8 @@ class SentinelAgent:
                                     'timestamp': datetime.fromtimestamp(stat.st_mtime).isoformat(),
                                     'file_path': file_path,
                                     'action': 'write',
-                                    'success': True
+                                    'success': True,
+                                    **self._get_system_metrics()
                                 }
                                 self.event_queue.put(event)
                         except:
@@ -165,10 +178,11 @@ class SentinelAgent:
                 if conn.status == 'ESTABLISHED' and conn.raddr:
                     event = {
                         'event_type': 'network',
-                        'timestamp': datetime.utcnow().isoformat(),
+                        'timestamp': datetime.now(timezone.utc).isoformat(),
                         'ip_address': conn.raddr.ip,
                         'port': conn.raddr.port,
-                        'success': True
+                        'success': True,
+                        **self._get_system_metrics()
                     }
                     self.event_queue.put(event)
                     
@@ -185,9 +199,10 @@ class SentinelAgent:
                         if 'admin' in proc.info['name'].lower() or 'sudo' in proc.info['name'].lower():
                             event = {
                                 'event_type': 'privilege_escalation',
-                                'timestamp': datetime.utcnow().isoformat(),
+                                'timestamp': datetime.now(timezone.utc).isoformat(),
                                 'action': proc.info['name'],
-                                'success': True
+                                'success': True,
+                                **self._get_system_metrics()
                             }
                             self.event_queue.put(event)
                 except:
@@ -214,13 +229,17 @@ class SentinelAgent:
         if not events:
             return
         
+        # Add employee_id to each event
+        events_with_employee_id = []
+        for event in events:
+            event['employee_id'] = self.employee_id
+            events_with_employee_id.append(event)
+            print(f"   📄 Event: {event.get('event_type')} | CPU: {event.get('cpu_usage')}% | RAM: {event.get('memory_usage')}%")
+        
         try:
             response = requests.post(
-                f"{self.backend_url}/api/events/batch",
-                json={
-                    'employee_id': self.employee_id,
-                    'events': events
-                },
+                f"{self.backend_url}/api/events/bulk",
+                json=events_with_employee_id,
                 timeout=10
             )
             
@@ -228,14 +247,18 @@ class SentinelAgent:
                 print(f"✅ Sent {len(events)} events to backend")
             else:
                 print(f"⚠️  Failed to send events: {response.status_code}")
-                # Re-queue events
+                # Re-queue events (without employee_id to avoid duplication)
                 for event in events:
+                    if 'employee_id' in event:
+                        del event['employee_id']
                     self.event_queue.put(event)
                     
         except Exception as e:
             print(f"❌ Error sending events: {e}")
-            # Re-queue events
+            # Re-queue events (without employee_id to avoid duplication)
             for event in events:
+                if 'employee_id' in event:
+                    del event['employee_id']
                 self.event_queue.put(event)
     
     def check_isolation_status(self):

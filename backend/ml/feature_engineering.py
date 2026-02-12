@@ -5,17 +5,14 @@ Extracts behavioral features from raw events to create employee baselines
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict
-from sqlalchemy.orm import Session
+from typing import List, Dict, Optional
 import models
 
-
-def calculate_behavioral_fingerprint(db: Session, employee_id: int, days_back: int = 30) -> Dict[str, float]:
+async def calculate_behavioral_fingerprint(employee_id: str, days_back: int = 30) -> Optional[Dict[str, float]]:
     """
     Calculate behavioral fingerprint for an employee based on historical events
     
     Args:
-        db: Database session
         employee_id: Employee ID
         days_back: Number of days to look back for baseline calculation
         
@@ -24,15 +21,17 @@ def calculate_behavioral_fingerprint(db: Session, employee_id: int, days_back: i
     """
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
     
-    # Get employee and their events
-    employee = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
+    # Get employee
+    employee = await models.Employee.get(employee_id)
     if not employee:
         return None
     
-    events = db.query(models.BehavioralEvent).filter(
-        models.BehavioralEvent.employee_id == employee_id,
-        models.BehavioralEvent.timestamp >= cutoff_date
-    ).all()
+    # Get events
+    # Note: Beanie find returns a cursor, to_list executes it
+    events = await models.BehavioralEvent.find(
+        models.BehavioralEvent.employee_id == employee.id,
+        models.BehavioralEvent.timestamp >= cutoff_date.replace(tzinfo=None) # naive datetime for mongo helper usually
+    ).to_list()
     
     if not events:
         # Return default fingerprint for new employees
@@ -47,7 +46,9 @@ def calculate_behavioral_fingerprint(db: Session, employee_id: int, days_back: i
         'port': e.port,
         'file_path': e.file_path,
         'action': e.action,
-        'success': e.success
+        'success': e.success,
+        'cpu_usage': getattr(e, 'cpu_usage', 0.0),
+        'memory_usage': getattr(e, 'memory_usage', 0.0)
     } for e in events])
     
     # Extract features
@@ -135,6 +136,18 @@ def calculate_behavioral_fingerprint(db: Session, employee_id: int, days_back: i
     else:
         features['weekday_activity_ratio'] = 0.7
         features['night_activity_ratio'] = 0.0
+
+    # 10. System Resource Patterns
+    if len(events_df) > 0:
+        features['avg_cpu_usage'] = float(events_df['cpu_usage'].mean())
+        features['std_cpu_usage'] = float(events_df['cpu_usage'].std()) if len(events_df) > 1 else 0.0
+        features['avg_memory_usage'] = float(events_df['memory_usage'].mean())
+        features['std_memory_usage'] = float(events_df['memory_usage'].std()) if len(events_df) > 1 else 0.0
+    else:
+        features['avg_cpu_usage'] = 0.0
+        features['std_cpu_usage'] = 0.0
+        features['avg_memory_usage'] = 0.0
+        features['std_memory_usage'] = 0.0
     
     return features
 
@@ -155,21 +168,32 @@ def get_default_fingerprint() -> Dict[str, float]:
         'network_activity_volume': 10.0,
         'failed_login_rate': 0.0,
         'weekday_activity_ratio': 0.8,
-        'night_activity_ratio': 0.05
+        'weekday_activity_ratio': 0.8,
+        'night_activity_ratio': 0.05,
+        'avg_cpu_usage': 10.0,
+        'std_cpu_usage': 5.0,
+        'avg_memory_usage': 40.0,
+        'std_memory_usage': 5.0
     }
 
 
-def extract_features_from_recent_events(db: Session, employee_id: int, hours_back: int = 24) -> Dict[str, float]:
+async def extract_features_from_recent_events(employee_id: str, hours_back: int = 24) -> Dict[str, float]:
     """
     Extract features from recent events for real-time anomaly detection
     Similar to fingerprint but for shorter time window
     """
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
     
-    events = db.query(models.BehavioralEvent).filter(
-        models.BehavioralEvent.employee_id == employee_id,
-        models.BehavioralEvent.timestamp >= cutoff_time
-    ).all()
+    # Get employee
+    employee = await models.Employee.get(employee_id)
+    if not employee:
+        # This might happen for new unknown IDs in events, fallback to default
+        return get_default_fingerprint()
+    
+    events = await models.BehavioralEvent.find(
+        models.BehavioralEvent.employee_id == employee.id,
+        models.BehavioralEvent.timestamp >= cutoff_time.replace(tzinfo=None)
+    ).to_list()
     
     if not events:
         return get_default_fingerprint()
@@ -183,10 +207,10 @@ def extract_features_from_recent_events(db: Session, employee_id: int, hours_bac
         'port': e.port,
         'file_path': e.file_path,
         'action': e.action,
-        'success': e.success
+        'success': e.success,
+        'cpu_usage': getattr(e, 'cpu_usage', 0.0),
+        'memory_usage': getattr(e, 'memory_usage', 0.0)
     } for e in events])
-    
-    employee = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
     
     features = {}
     
@@ -202,7 +226,7 @@ def extract_features_from_recent_events(db: Session, employee_id: int, hours_bac
     
     features['unique_locations_count'] = events_df['location'].dropna().nunique()
     
-    if employee and employee.baseline_location:
+    if employee.baseline_location:
         location_events = events_df[events_df['location'].notna()]
         if len(location_events) > 0:
             different_locations = (location_events['location'] != employee.baseline_location).sum()
@@ -257,6 +281,17 @@ def extract_features_from_recent_events(db: Session, employee_id: int, hours_bac
     else:
         features['weekday_activity_ratio'] = 0.7
         features['night_activity_ratio'] = 0.0
+
+    if len(events_df) > 0:
+        features['avg_cpu_usage'] = float(events_df['cpu_usage'].mean())
+        features['std_cpu_usage'] = float(events_df['cpu_usage'].std()) if len(events_df) > 1 else 0.0
+        features['avg_memory_usage'] = float(events_df['memory_usage'].mean())
+        features['std_memory_usage'] = float(events_df['memory_usage'].std()) if len(events_df) > 1 else 0.0
+    else:
+        features['avg_cpu_usage'] = 0.0
+        features['std_cpu_usage'] = 0.0
+        features['avg_memory_usage'] = 0.0
+        features['std_memory_usage'] = 0.0
     
     return features
 
@@ -277,7 +312,11 @@ def get_feature_names() -> List[str]:
         'network_activity_volume',
         'failed_login_rate',
         'weekday_activity_ratio',
-        'night_activity_ratio'
+        'night_activity_ratio',
+        'avg_cpu_usage',
+        'std_cpu_usage',
+        'avg_memory_usage',
+        'std_memory_usage'
     ]
 
 

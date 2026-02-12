@@ -1,57 +1,57 @@
 """
 Dashboard statistics and analytics routes
 """
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from fastapi import APIRouter
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Dict, Any
 import models
 import schemas
-from database import get_db
+from beanie import PydanticObjectId
+from beanie.operators import In
 
 router = APIRouter()
 
 
 @router.get("/stats", response_model=schemas.DashboardStats)
-def get_dashboard_stats(db: Session = Depends(get_db)):
+async def get_dashboard_stats():
     """Get overall dashboard statistics"""
     # Total employees
-    total_employees = db.query(func.count(models.Employee.id)).scalar()
+    total_employees = await models.Employee.find_all().count()
     
     # Active threats (open anomalies)
-    active_threats = db.query(func.count(models.Anomaly.id)).filter(
+    active_threats = await models.Anomaly.find(
         models.Anomaly.status == 'open'
-    ).scalar()
+    ).count()
     
     # Total anomalies
-    total_anomalies = db.query(func.count(models.Anomaly.id)).scalar()
+    total_anomalies = await models.Anomaly.find_all().count()
     
     # Average risk score
-    avg_risk = db.query(func.avg(models.Anomaly.risk_score)).filter(
+    # Beanie avg() returns float or None
+    avg_risk = await models.Anomaly.find(
         models.Anomaly.status == 'open'
-    ).scalar() or 0
+    ).avg(models.Anomaly.risk_score) or 0
     
     # Count by risk level
-    critical_threats = db.query(func.count(models.Anomaly.id)).filter(
+    critical_threats = await models.Anomaly.find(
         models.Anomaly.risk_level == 'critical',
         models.Anomaly.status == 'open'
-    ).scalar()
+    ).count()
     
-    high_threats = db.query(func.count(models.Anomaly.id)).filter(
+    high_threats = await models.Anomaly.find(
         models.Anomaly.risk_level == 'high',
         models.Anomaly.status == 'open'
-    ).scalar()
+    ).count()
     
-    medium_threats = db.query(func.count(models.Anomaly.id)).filter(
+    medium_threats = await models.Anomaly.find(
         models.Anomaly.risk_level == 'medium',
         models.Anomaly.status == 'open'
-    ).scalar()
+    ).count()
     
-    low_threats = db.query(func.count(models.Anomaly.id)).filter(
+    low_threats = await models.Anomaly.find(
         models.Anomaly.risk_level == 'low',
         models.Anomaly.status == 'open'
-    ).scalar()
+    ).count()
     
     return {
         'total_employees': total_employees,
@@ -66,23 +66,23 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/risk-distribution", response_model=schemas.RiskDistribution)
-def get_risk_distribution(db: Session = Depends(get_db)):
+async def get_risk_distribution():
     """Get distribution of anomalies by risk level"""
-    low = db.query(func.count(models.Anomaly.id)).filter(
+    low = await models.Anomaly.find(
         models.Anomaly.risk_level == 'low'
-    ).scalar()
+    ).count()
     
-    medium = db.query(func.count(models.Anomaly.id)).filter(
+    medium = await models.Anomaly.find(
         models.Anomaly.risk_level == 'medium'
-    ).scalar()
+    ).count()
     
-    high = db.query(func.count(models.Anomaly.id)).filter(
+    high = await models.Anomaly.find(
         models.Anomaly.risk_level == 'high'
-    ).scalar()
+    ).count()
     
-    critical = db.query(func.count(models.Anomaly.id)).filter(
+    critical = await models.Anomaly.find(
         models.Anomaly.risk_level == 'critical'
-    ).scalar()
+    ).count()
     
     return {
         'low': low,
@@ -93,55 +93,61 @@ def get_risk_distribution(db: Session = Depends(get_db)):
 
 
 @router.get("/top-threats", response_model=List[schemas.TopThreat])
-def get_top_threats(limit: int = 10, db: Session = Depends(get_db)):
+async def get_top_threats(limit: int = 10):
     """Get top employees by risk score"""
-    # Subquery to get latest anomaly per employee
-    subquery = db.query(
-        models.Anomaly.employee_id,
-        func.max(models.Anomaly.risk_score).label('max_risk'),
-        func.count(models.Anomaly.id).label('anomaly_count'),
-        func.max(models.Anomaly.detected_at).label('latest_anomaly')
-    ).filter(
-        models.Anomaly.status == 'open'
-    ).group_by(
-        models.Anomaly.employee_id
-    ).subquery()
+    # Aggregation to get latest anomaly per employee
+    pipeline = [
+        {'$match': {'status': 'open'}},
+        {'$group': {
+            '_id': '$employee_id',
+            'max_risk': {'$max': '$risk_score'},
+            'anomaly_count': {'$sum': 1},
+            'latest_anomaly': {'$max': '$detected_at'}
+        }},
+        {'$sort': {'max_risk': -1}},
+        {'$limit': limit}
+    ]
     
-    # Join with employees
-    results = db.query(
-        models.Employee,
-        subquery.c.max_risk,
-        subquery.c.anomaly_count,
-        subquery.c.latest_anomaly
-    ).join(
-        subquery,
-        models.Employee.id == subquery.c.employee_id
-    ).order_by(
-        desc(subquery.c.max_risk)
-    ).limit(limit).all()
+    results = await models.Anomaly.aggregate(pipeline).to_list()
     
     top_threats = []
-    for employee, max_risk, anomaly_count, latest_anomaly in results:
-        top_threats.append({
-            'employee_id': employee.id,
-            'employee_name': employee.name,
-            'risk_score': int(max_risk),
-            'anomaly_count': anomaly_count,
-            'latest_anomaly': latest_anomaly
-        })
+    
+    if not results:
+        return top_threats
+        
+    # Fetch employees
+    emp_ids = [res['_id'] for res in results if res['_id']]
+    # Ensure IDs are in correct format for query (PydanticObjectId)
+    # Beanie stores them as ObjectId usually if defined as such
+    
+    employees = await models.Employee.find(In(models.Employee.id, emp_ids)).to_list()
+    emp_map = {e.id: e for e in employees}
+    
+    for res in results:
+        emp_id = res['_id']
+        employee = emp_map.get(emp_id)
+        
+        if employee:
+            top_threats.append({
+                'employee_id': str(employee.id),
+                'employee_name': employee.name,
+                'risk_score': int(res['max_risk']),
+                'anomaly_count': int(res['anomaly_count']),
+                'latest_anomaly': res['latest_anomaly']
+            })
     
     return top_threats
 
 
 @router.get("/timeline", response_model=List[schemas.TimelinePoint])
-def get_anomaly_timeline(days: int = 30, db: Session = Depends(get_db)):
+async def get_anomaly_timeline(days: int = 30):
     """Get anomaly timeline for the past N days"""
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Get all anomalies in the time range
-    anomalies = db.query(models.Anomaly).filter(
+    anomalies = await models.Anomaly.find(
         models.Anomaly.detected_at >= cutoff_date
-    ).all()
+    ).to_list()
     
     # Group by date
     timeline_data = {}

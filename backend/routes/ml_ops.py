@@ -2,37 +2,35 @@
 ML operations routes
 Model training, prediction, and metadata
 """
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import Dict
+from fastapi import APIRouter, HTTPException
 import numpy as np
 import models
 import schemas
-from database import get_db
 from ml.anomaly_detector import AnomalyDetector, create_training_data
 from ml.feature_engineering import calculate_behavioral_fingerprint, features_to_array
 from ml.explainability import ExplainabilityEngine
+from beanie import PydanticObjectId
 
 router = APIRouter()
 
 
 @router.post("/train")
 @router.get("/train")
-def train_model(db: Session = Depends(get_db)):
+async def train_model():
     """Train or retrain the anomaly detection model"""
     # Get all employees
-    employees = db.query(models.Employee).all()
+    employees = await models.Employee.find_all().to_list()
     
-    if len(employees) < 10:
+    if len(employees) < 1:
         raise HTTPException(
             status_code=400,
-            detail="Need at least 10 employees with behavioral data to train model"
+            detail="Need at least 1 employee with behavioral data to train model"
         )
     
     # Calculate fingerprints for all employees
     fingerprints = []
     for employee in employees:
-        features = calculate_behavioral_fingerprint(db, employee.id, days_back=30)
+        features = await calculate_behavioral_fingerprint(str(employee.id), days_back=30)
         if features:
             fingerprints.append(features)
             
@@ -41,11 +39,9 @@ def train_model(db: Session = Depends(get_db)):
                 employee_id=employee.id,
                 **features
             )
-            db.add(db_fingerprint)
+            await db_fingerprint.create()
     
-    db.commit()
-    
-    if len(fingerprints) < 10:
+    if len(fingerprints) < 1:
         raise HTTPException(
             status_code=400,
             detail="Not enough behavioral data to train model"
@@ -67,7 +63,7 @@ def train_model(db: Session = Depends(get_db)):
 
 
 @router.get("/model-info", response_model=schemas.ModelInfo)
-def get_model_info():
+async def get_model_info():
     """Get information about the current model"""
     detector = AnomalyDetector()
     
@@ -86,15 +82,14 @@ def get_model_info():
 
 
 @router.post("/predict", response_model=schemas.PredictionResponse)
-def predict_anomaly(
-    request: schemas.PredictionRequest,
-    db: Session = Depends(get_db)
-):
+async def predict_anomaly(request: schemas.PredictionRequest):
     """Manual prediction endpoint"""
     # Verify employee exists
-    employee = db.query(models.Employee).filter(
-        models.Employee.id == request.employee_id
-    ).first()
+    if PydanticObjectId.is_valid(request.employee_id):
+        employee = await models.Employee.get(request.employee_id)
+    else:
+        employee = await models.Employee.find_one(models.Employee.employee_id == request.employee_id)
+
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
     

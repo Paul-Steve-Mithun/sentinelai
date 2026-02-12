@@ -129,11 +129,20 @@ class AnomalyDetector:
         
         Isolation Forest scores typically range from -0.5 (very anomalous) to 0.5 (very normal)
         """
-        # Normalize to 0-100 scale
-        # -0.5 -> 100, 0.5 -> 0
-        normalized = (0.5 - anomaly_score) * 100
-        risk_score = int(np.clip(normalized, 0, 100))
-        return risk_score
+        # Adjusted scoring logic to be less aggressive
+        # Raw score < 0 is anomaly. 
+        # Typically -0.2 to -0.5 is strong anomaly.
+        # -0.01 to -0.2 is weak/mild anomaly.
+        
+        if anomaly_score >= 0:
+            return 0
+            
+        # Map -0.5...0 to 100...0
+        # Formula: score * -200 (approx)
+        # -0.5 * -200 = 100
+        # -0.1 * -200 = 20
+        risk_score = abs(anomaly_score) * 200
+        return int(np.clip(risk_score, 0, 100))
     
     def _get_risk_level(self, risk_score: int) -> str:
         """
@@ -143,7 +152,7 @@ class AnomalyDetector:
             return 'critical'
         elif risk_score >= 60:
             return 'high'
-        elif risk_score >= 40:
+        elif risk_score >= 30:
             return 'medium'
         else:
             return 'low'
