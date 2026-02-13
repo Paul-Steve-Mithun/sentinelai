@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, User, MapPin, Mail, Briefcase, Shield, ShieldOff, Activity } from 'lucide-react';
+import { ArrowLeft, User, MapPin, Mail, Briefcase, Shield, ShieldOff, Activity, FileText } from 'lucide-react';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts';
 import RiskBadge from '../components/RiskBadge';
-import { getEmployee, getEmployeeProfile, getEmployeeAnomalies, isolateAgent, restoreAgent, getAgentStatus } from '../services/api';
+import { getEmployee, getEmployeeProfile, getEmployeeAnomalies, isolateAgent, restoreAgent, getAgentStatus, generateAnomalyReport } from '../services/api';
 
 export default function EmployeeProfile() {
     const { id } = useParams();
@@ -13,6 +13,7 @@ export default function EmployeeProfile() {
     const [loading, setLoading] = useState(true);
     const [isIsolated, setIsIsolated] = useState(false);
     const [processingAction, setProcessingAction] = useState(false);
+    const [generatingReport, setGeneratingReport] = useState(false);
 
     useEffect(() => {
         loadEmployeeData();
@@ -63,6 +64,36 @@ export default function EmployeeProfile() {
             alert('Failed to update isolation status');
         } finally {
             setProcessingAction(false);
+        }
+    };
+
+    const handleGenerateReport = async () => {
+        if (!employee) return;
+        setGeneratingReport(true);
+        try {
+            const response = await generateAnomalyReport(employee.id || id);
+
+            // Create blob from response
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `SentinelAI_Anomaly_Report_${employee.employee_id}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+            // Trigger download
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert('Failed to generate report. Please try again.');
+        } finally {
+            setGeneratingReport(false);
         }
     };
 
@@ -120,11 +151,20 @@ export default function EmployeeProfile() {
                         )}
 
                         <button
+                            onClick={handleGenerateReport}
+                            disabled={generatingReport}
+                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 ${generatingReport ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                            <FileText className="w-5 h-5" />
+                            <span>{generatingReport ? "Generating..." : "Generate Report"}</span>
+                        </button>
+
+                        <button
                             onClick={handleToggleIsolation}
                             disabled={processingAction}
                             className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition ${isIsolated
-                                    ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                                    : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                                ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                                : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                                 } ${processingAction ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
                             {isIsolated ? (

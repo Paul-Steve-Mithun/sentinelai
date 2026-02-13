@@ -15,6 +15,7 @@ export const getEmployee = (id) => api.get(`/api/employees/${id}`);
 export const createEmployee = (data) => api.post('/api/employees', data);
 export const getEmployeeProfile = (id) => api.get(`/api/employees/${id}/profile`);
 export const getEmployeeAnomalies = (id) => api.get(`/api/employees/${id}/anomalies`);
+export const generateAnomalyReport = (id) => api.get(`/api/employees/${id}/anomalies/report`, { responseType: 'blob' });
 export const isolateAgent = (id) => api.post(`/api/agent/${id}/isolate`);
 export const restoreAgent = (id) => api.post(`/api/agent/${id}/restore`);
 export const getAgentStatus = (id) => api.get(`/api/agent/${id}/status`);

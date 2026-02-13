@@ -4,7 +4,7 @@ import random
 import uuid
 from datetime import datetime, timezone
 
-BASE_URL = "http://localhost:8000/api"
+BASE_URL = "http://3.106.209.92:8000/api"
 
 def register_agent():
     print("🤖 Registering malicious agent...")
@@ -86,7 +86,7 @@ def trigger_training():
         return False
 
 def main():
-    print("🚀 SENTINEL AI - HACKATHON DEMO SIMULATION 🚀")
+    print("🚀 SENTINEL AI - DEMO SIMULATION 🚀")
     print("===============================================")
     
     # 1. Register
@@ -112,7 +112,6 @@ def main():
     send_events(emp_id, count=5, type="attack")
     
     print("\n✅ Attack simulation complete.")
-    print("👉 Check the Dashboard for 'High CPU Usage' alerts and MITRE T1496 mapping.")
 
 if __name__ == "__main__":
     main()
